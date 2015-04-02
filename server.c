@@ -7,7 +7,7 @@
 #include<unistd.h>
 #include<pthread.h>
 
-#define MAXLINE 4096
+#define MAXLINE 1000
 #define SERV_PORT 3000
 //maximum of require to be handled that can be stored
 #define LISTENQ 10
@@ -35,7 +35,7 @@ struct SENDTOCLI
 	char ctrl2;
 	char from[10];
 	char dst[10];
-	char data[2048];
+	char data[500];
 
 };
 struct SENDTOCLI sorline;
@@ -48,7 +48,7 @@ struct CLIENT_SEND
 	char local_name[10];//your name
 	char local_key[10];
 	char dst_name[10];//whom to send to
-	char data[2048];
+	char data[500];
 };
 struct CLIENT_SEND recvl;
 
@@ -57,7 +57,7 @@ char sendlineSor[MAXLINE];
 char sendlineDst[MAXLINE];
 int findOnlineStatus(char name[]);
 int findConnfd(char name[]);
-void loginVerify(char name[],char key[]);
+void loginVerify(char name[],char key[],int j);
 void registeVerify(char name[],char key[]);
 void unlogin(char name[]);
 int findDBFree();
@@ -65,9 +65,10 @@ int findFree();
 void *dealing(void *j);
 
 int findOnlineStatus(char name[]){
-	for (int i = 0; i < 10; ++i)
+	int i;
+	for (i = 0; i < 10; ++i)
 	{
-		if (strcmp(name,onlineUsers[i].name))
+		if (!strcmp(name,onlineUsers[i].name))
 		{
 			return onlineUsers[i].on_off;
 		}
@@ -76,9 +77,10 @@ int findOnlineStatus(char name[]){
 	return 0;
 }
 int findConnfd(char name[]){
-	for (int i = 0; i < 10; ++i)
+	int i;
+	for (i = 0; i < 10; ++i)
 	{
-		if (strcmp(name,onlineUsers[i].name))
+		if (!strcmp(name,onlineUsers[i].name))
 		{
 			return onlineUsers[i].connfd;
 		}
@@ -87,32 +89,40 @@ int findConnfd(char name[]){
 	return -1;
 
 }
-void loginVerify(char name[],char key[]){
-	for (int i = 0; i < 10; ++i)
+void loginVerify(char name[],char key[],int j){
+	int i;
+	for (i = 0; i < 10; ++i)
 	{
-		if (strcmp(name,users[i].name))
+		if (!strcmp(name,users[i].name))
 		{
-			if (strcmp(key,users[i].key))
+			if (!strcmp(key,users[i].key))
 			{
 				sorline.ctrl1='3';
 				sorline.ctrl2='1';
 				printf("%s\n","login succeed" );
+				strcpy(onlineUsers[j].name,name);
+				onlineUsers[j].on_off=1;
 				return ;
 			}else 
 			printf("%s\n","password incorrect" );
 		}
 		else ;
 	}
+	
 
 	printf("%s\n","name not found" );
 	sorline.ctrl1='3';
 	sorline.ctrl2='2';
+
+
+
 	return ;
 }
 void registeVerify(char name[],char key[]){
-	for (int i = 0; i < 10; ++i)
+	int i;
+	for (i = 0; i < 10; ++i)
 	{
-		if (strcmp(name,users[i].name))
+		if (!strcmp(name,users[i].name))
 		{
 			sorline.ctrl1='3';
 			sorline.ctrl2='4';
@@ -123,17 +133,23 @@ void registeVerify(char name[],char key[]){
 
 	sorline.ctrl1='3';
 	sorline.ctrl2='3';
-	int i;
+
 	i=findDBFree();
+	if (i==-1)
+	{
+		printf("%s\n","No this account " );
+	}
+	else
 	strcpy(users[i].name,name);
 	strcpy(users[i].key,key);
 	users[i].tag=0;
-	printf("%s\n","registe succeed" );
+	printf("%s\n","regist succeed" );
 }
 void unlogin(char name[]){
-	for (int i = 0; i < 10; ++i)
+	int i;
+	for (i = 0; i < 10; ++i)
 	{
-		if (strcmp(name,onlineUsers[i].name))
+		if (!strcmp(name,onlineUsers[i].name))
 		{
 			onlineUsers[i].on_off=0;//offline
 			sorline.ctrl1='5';
@@ -146,51 +162,62 @@ void unlogin(char name[]){
 	printf("%s\n","unlogin error" );
 }
 int findDBFree(){
-	for (int i = 0; i < 10; ++i)
+	int i;
+	for (i = 0; i < 10; ++i)
 	{
 		if (users[i].tag==1)
 			return i;
 	}
+	return -1;
 }
 int findFree(){
-	for (int i = 0; i < 10; ++i)
+	int i;
+	for (i = 0; i < 10; ++i)
 	{
 		if (onlineUsers[i].on_off==0)
 			return i;
 	}
+	return -1;
 }
 void *dealing(void *jj){
 /*--------------------getting data------------------------*/
+
+	printf("%s\n","dealing begin" );
 	int connfd;
 	int j=*(int*)jj;
 	connfd=onlineUsers[j].connfd;
 	recv(connfd,recvline,MAXLINE,0);/////////////////
+	while(1){
+	
+	printf("%s\n",recvline );
+
 	recvl.ctrl1=recvline[0];
 	recvl.ctrl2=recvline[1];
-	for (int i = 0; i < 10; ++i)
+	int i;
+	for ( i = 0; i < 10; ++i)
 	{
 		recvl.local_name[i]=recvline[i+2];
 	}
-	for (int i = 0; i < 10; ++i)
+	for ( i = 0; i < 10; ++i)
 	{
 		recvl.local_key[i]=recvline[i+12];
 	}
-	for (int i = 0; i < 10; ++i)
+	for ( i = 0; i < 10; ++i)
 	{
 		recvl.dst_name[i]=recvline[i+22];
 	}
-	for (int i = 0; recvline[i+32]!='\0'; ++i)
+	for ( i = 0; recvline[i+32]!='\0'; ++i)
 	{
 		recvl.data[i]=recvline[i+32];
 	}
-	strcmp(onlineUsers[j].name,recvl.local_name);
+
 /*--------------------getting data------------------------*/
 
 	if (recvl.ctrl1=='1')
 	{
 		if (recvl.ctrl2=='1')
 		{
-			loginVerify(recvl.local_name,recvl.local_key);
+			loginVerify(recvl.local_name,recvl.local_key,j);
 		}
 		else if (recvl.ctrl2=='2')
 		{
@@ -206,9 +233,10 @@ void *dealing(void *jj){
 			strcpy(dstline.from,recvl.local_name);
 			strcpy(dstline.dst,recvl.dst_name);
 			strcpy(dstline.data,recvl.data);
+
 		//source client
-			sorline.ctrl1='4';
-			sorline.ctrl2='1';
+			//sorline.ctrl1='4';
+			//sorline.ctrl2='1';
 
 		}
 		else if (recvl.ctrl2=='2')
@@ -219,13 +247,13 @@ void *dealing(void *jj){
 			strcpy(dstline.dst,recvl.dst_name);//all
 			strcpy(dstline.data,recvl.data);
 
-			sorline.ctrl1='4';
-			sorline.ctrl2='1';
+			//sorline.ctrl1='4';
+			//sorline.ctrl2='1';
 		}
 		else 
 		{
-		sorline.ctrl1='4';
-		sorline.ctrl2='2';
+		//sorline.ctrl1='4';
+		//sorline.ctrl2='2';
 		}
 	}
 	else if (recvl.ctrl1=='3')
@@ -239,51 +267,84 @@ void *dealing(void *jj){
 	{
 		sorline.ctrl1='0';
 		sorline.ctrl2='0';
+
+
 	}
 
-	sendlineSor[0]=sorline.ctrl1;
-	sendlineSor[1]=sorline.ctrl2;
-	for (int i = 0; i < 10; ++i)
-	{
-		sendlineSor[2+i]=sorline.from[i];
-	}
-	for (int i = 0; i < 10; ++i)
-	{
-		sendlineSor[12+i]=sorline.dst[i];
-	}
-	for (int i = 0; sorline.data[i]!='\0'; ++i)
-	{
-		sendlineSor[22+i]=sorline.data[i];
-	}
 
-	sendlineDst[0]=dstline.ctrl1;
-	sendlineDst[1]=dstline.ctrl2;
-	for (int i = 0; i < 10; ++i)
+	if (sorline.ctrl1=='0'&&sorline.ctrl2=='0')
 	{
-		sendlineDst[2+i]=dstline.from[i];
-	}
-	for (int i = 0; i < 10; ++i)
-	{
-		sendlineDst[12+i]=dstline.dst[i];
-	}
-	for (int i = 0; dstline.data[i]!='\0'; ++i)
-	{
-		sendlineDst[22+i]=dstline.data[i];
-	}
+		sendlineSor[0]=sorline.ctrl1;
+		sendlineSor[1]=sorline.ctrl2;
+		send(connfd,sendlineSor,MAXLINE,0);
+		recv(connfd,recvline,MAXLINE,0);/////////////////
+		printf("connfd:%d\n", connfd);
+		printf("sendlineSor:%s\n", sendlineSor);
 
-	send(findConnfd(recvl.local_name),sendlineSor,MAXLINE,0);
-	if (recvl.ctrl1=='2'&&recvl.ctrl2=='2')//group send
+	}
+	else //if (recvl.ctrl1=='2')
 	{
-		for (int i = 0; i < 10; ++i)
+		
+		sendlineDst[0]=dstline.ctrl1;
+		sendlineDst[1]=dstline.ctrl2;
+		for ( i = 0; i < 10; ++i)
 		{
-			if (onlineUsers[i].on_off)//if on
+			sendlineDst[2+i]=dstline.from[i];
+		}
+		for ( i = 0; i < 10; ++i)
+		{
+			sendlineDst[12+i]=dstline.dst[i];
+		}
+		for ( i = 0; dstline.data[i]!='\0'; ++i)
+		{
+			sendlineDst[22+i]=dstline.data[i];
+		}
+
+
+		//if need to send msg
+		if (recvl.ctrl1=='2'&&recvl.ctrl2=='2')//group send
+		{
+			for ( i = 0; i < 10; ++i)
 			{
-				send(onlineUsers[i].connfd,sendlineDst,MAXLINE,0);
+				if (onlineUsers[i].on_off)//if on
+				{
+					send(onlineUsers[i].connfd,sendlineDst,MAXLINE,0);
+					recv(connfd,recvline,MAXLINE,0);/////////////////
+				}
 			}
 		}
-	}
-	else send(findConnfd(recvl.dst_name),sendlineDst,MAXLINE,0);
+		else if (recvl.ctrl1=='2'&&recvl.ctrl2=='1')
+		{
+			int findConnfd_t=-1;
+			findConnfd_t=findConnfd(recvl.dst_name);
+			if (findConnfd_t==-1)///send failed
+			{
+				sorline.ctrl1='4';
+				sorline.ctrl2='2';
+			}else 
+			send(findConnfd_t,sendlineDst,MAXLINE,0);//to certain one dst
+		}
+		
+		sendlineSor[0]=sorline.ctrl1;
+		sendlineSor[1]=sorline.ctrl2;
+		for ( i = 0; i < 10; ++i)
+		{
+			sendlineSor[2+i]=sorline.from[i];
+		}
+		for ( i = 0; i < 10; ++i)
+		{
+			sendlineSor[12+i]=sorline.dst[i];
+		}
+		for ( i = 0; sorline.data[i]!='\0'; ++i)
+		{
+			sendlineSor[22+i]=sorline.data[i];
+		}
 
+		send(connfd,sendlineSor,MAXLINE,0);//to source
+		recv(connfd,recvline,MAXLINE,0);/////////////////
+	}	
+}
+	return NULL;
 }
 
 int main()
@@ -296,21 +357,22 @@ int main()
 	strcpy(users[2].name,"test");
 	strcpy(users[2].key,"112233");
 	users[0].tag=0;
-
-	for (int i = 0; i < 10; ++i)
+	int i;
+	for ( i = 0; i < 10; ++i)
 	{
-		onlineUsers[i].on_off=false;
+		onlineUsers[i].on_off=0;//initial 0"offline
 	}
 
 /*-------------database initial--------------------*/
-	int listenfd,connfd,n;
+	int listenfd;
 	//pid_t childpid;
 	socklen_t clilen;
-	char buf[MAXLINE];
-	struct sockaddr_in cliaddr,servaddr;
 
+	struct sockaddr_in cliaddr,servaddr;
 	listenfd=socket(AF_INET,SOCK_STREAM,0);
 
+	const int on=1;
+	setsockopt(listenfd,SOL_SOCKET,SO_REUSEADDR,&on,sizeof(on));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
 	servaddr.sin_port=htons(SERV_PORT);
@@ -325,8 +387,14 @@ int main()
 	while(1){
 		clilen=sizeof(cliaddr);
 		int j=findFree();
+		if (j==-1)
+		{
+			printf("%s\n","No room for new account!Please wait!" );
+		}
+		else
 		onlineUsers[j].connfd=accept (listenfd,(struct sockaddr *) &cliaddr, &clilen);
 		pthread_create(&thread[j],NULL,dealing,(void *)&j);
+		printf("%s\n","dddddd" );
 
 	}
 
