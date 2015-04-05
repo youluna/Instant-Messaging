@@ -55,6 +55,7 @@ struct CLIENT_SEND recvl;
 char recvline[MAXLINE];
 char sendlineSor[MAXLINE];
 char sendlineDst[MAXLINE];
+pthread_mutex_t count_mutex;
 int findOnlineStatus(char name[]);
 int findConnfd(char name[]);
 void loginVerify(char name[],char key[],int j);
@@ -63,6 +64,30 @@ void unlogin(char name[]);
 int findDBFree();
 int findFree();
 void *dealing(void *j);
+void sendOnlineList();
+
+
+void sendOnlineList(){
+	sorline.ctrl1='4';
+	sorline.ctrl2='4';//send online list succeed!
+	int i;
+	memset(sorline.data,'\0',500);
+	char a[2]={'#','#'};
+	printf("sendOnlineList:\n" );
+	for ( i = 0; i < 10; ++i)
+	{
+		if (onlineUsers[i].on_off==1)
+		{
+			printf("in circle\n");
+			strcat(sorline.data,onlineUsers[i].name);
+			printf("%s\n",sorline.data );
+			strcat(sorline.data,a);
+			printf("%s\n",sorline.data );
+		}
+		else ;
+	}
+
+}
 
 int findOnlineStatus(char name[]){
 	int i;
@@ -70,7 +95,8 @@ int findOnlineStatus(char name[]){
 	{
 		if (!strcmp(name,onlineUsers[i].name))
 		{
-			return onlineUsers[i].on_off;
+			int k=onlineUsers[i].on_off;
+			return k;
 		}
 	}
 	printf("%s\n","can't find the name" );
@@ -82,8 +108,12 @@ int findConnfd(char name[]){
 	{
 		if (!strcmp(name,onlineUsers[i].name))
 		{
+			//printf("%d\n", onlineUsers[i].connfd);
 			return onlineUsers[i].connfd;
 		}
+		//printf("%s\n",onlineUsers[i].name );
+		//printf("%d\n",onlineUsers[i].on_off );
+		//printf("%d\n",onlineUsers[i].connfd );////////////////////////////////////////////////////
 	}
 	printf("%s\n","can't find the name" );
 	return -1;
@@ -93,16 +123,17 @@ void loginVerify(char name[],char key[],int j){
 	int i;
 	for (i = 0; i < 10; ++i)
 	{
-		if (!strcmp(name,users[i].name))
+		if (!strcmp(name,users[i].name)&&findOnlineStatus(users[i].name)==0)
 		{
 			if (!strcmp(key,users[i].key))
 			{
-				sorline.ctrl1='3';
-				sorline.ctrl2='1';
-				printf("%s\n","login succeed" );
-				strcpy(onlineUsers[j].name,name);
-				onlineUsers[j].on_off=1;
-				return ;
+					sorline.ctrl1='3';
+					sorline.ctrl2='1';
+					strcpy(sorline.from,name);
+					printf("%s\n","login succeed" );
+					strcpy(onlineUsers[j].name,name);
+					onlineUsers[j].on_off=1;
+					return ;	
 			}else 
 			printf("%s\n","password incorrect" );
 		}
@@ -114,8 +145,6 @@ void loginVerify(char name[],char key[],int j){
 	sorline.ctrl1='3';
 	sorline.ctrl2='2';
 
-
-
 	return ;
 }
 void registeVerify(char name[],char key[]){
@@ -126,20 +155,23 @@ void registeVerify(char name[],char key[]){
 		{
 			sorline.ctrl1='3';
 			sorline.ctrl2='4';
-			printf("%s\n","name already exits" );
+			printf("%s\n","regist failed.name already exits" );
 			return ;
 		}
 	}
 
-	sorline.ctrl1='3';
-	sorline.ctrl2='3';
+	
 
 	i=findDBFree();
 	if (i==-1)
 	{
-		printf("%s\n","No this account " );
+		sorline.ctrl1='3';
+		sorline.ctrl2='4';
+		printf("%s\n","regist failed.No space " );
 	}
 	else
+	sorline.ctrl1='3';
+	sorline.ctrl2='3';
 	strcpy(users[i].name,name);
 	strcpy(users[i].key,key);
 	users[i].tag=0;
@@ -152,13 +184,13 @@ void unlogin(char name[]){
 		if (!strcmp(name,onlineUsers[i].name))
 		{
 			onlineUsers[i].on_off=0;//offline
+			onlineUsers[i].connfd=0;
 			sorline.ctrl1='5';
 			sorline.ctrl1='1';
 			return ;
 		}
 	}
-	sorline.ctrl1='5';
-	sorline.ctrl1='2';		
+	pthread_exit(NULL);		
 	printf("%s\n","unlogin error" );
 }
 int findDBFree(){
@@ -174,7 +206,7 @@ int findFree(){
 	int i;
 	for (i = 0; i < 10; ++i)
 	{
-		if (onlineUsers[i].on_off==0)
+		if (onlineUsers[i].connfd==0)
 			return i;
 	}
 	return -1;
@@ -184,16 +216,29 @@ void *dealing(void *jj){
 
 	printf("%s\n","dealing begin" );
 	int connfd;
-	int j=*(int*)jj;
+	int j=(int)jj;
 	connfd=onlineUsers[j].connfd;
-	recv(connfd,recvline,MAXLINE,0);/////////////////
-	while(1){
-	
-	printf("%s\n",recvline );
+	printf("%d\n",j );
+	printf("%d",connfd);
+	memset(recvline,0,532);
+
+	int n;
+
+	while((n=recv(connfd,recvline,MAXLINE,0))>0){
+		printf("%s\n","--------------onlineUsers data----------------" );
+		int i;
+		for (i = 0; i < 10; ++i)
+		{
+		printf("%s\n",onlineUsers[i].name );
+		printf("%d\n",onlineUsers[i].on_off );
+		printf("%d\n",onlineUsers[i].connfd );
+		}
+		printf("%s\n","--------------onlineUsers data----------------" );
+	printf("recvline:%s\n",recvline );
 
 	recvl.ctrl1=recvline[0];
 	recvl.ctrl2=recvline[1];
-	int i;
+	
 	for ( i = 0; i < 10; ++i)
 	{
 		recvl.local_name[i]=recvline[i+2];
@@ -223,38 +268,36 @@ void *dealing(void *jj){
 		{
 			registeVerify(recvl.local_name,recvl.local_key);
 		}
+		else if (recvl.ctrl2=='3')
+		{
+			sendOnlineList();
+		}
 	}
 	else if (recvl.ctrl1=='2')
 	{
 		if (recvl.ctrl2=='1')
 		{//dst client
+
 			dstline.ctrl1='4';
-			dstline.ctrl1='3';
+			dstline.ctrl2='3';
 			strcpy(dstline.from,recvl.local_name);
 			strcpy(dstline.dst,recvl.dst_name);
 			strcpy(dstline.data,recvl.data);
-
-		//source client
-			//sorline.ctrl1='4';
-			//sorline.ctrl2='1';
-
+			
+			printf("dstline.from:%s\n",dstline.from );
+			printf("dstline.dst:%s\n",dstline.dst );
+			printf("dstline.data:%s\n",dstline.data );
 		}
 		else if (recvl.ctrl2=='2')
 		{
 			dstline.ctrl1='4';
-			dstline.ctrl1='3';
+			dstline.ctrl2='3';
 			strcpy(dstline.from,recvl.local_name);
 			strcpy(dstline.dst,recvl.dst_name);//all
 			strcpy(dstline.data,recvl.data);
 
-			//sorline.ctrl1='4';
-			//sorline.ctrl2='1';
 		}
-		else 
-		{
-		//sorline.ctrl1='4';
-		//sorline.ctrl2='2';
-		}
+
 	}
 	else if (recvl.ctrl1=='3')
 	{
@@ -263,27 +306,6 @@ void *dealing(void *jj){
 			unlogin(recvl.local_name);
 		}
 	}
-	else 
-	{
-		sorline.ctrl1='0';
-		sorline.ctrl2='0';
-
-
-	}
-
-
-	if (sorline.ctrl1=='0'&&sorline.ctrl2=='0')
-	{
-		sendlineSor[0]=sorline.ctrl1;
-		sendlineSor[1]=sorline.ctrl2;
-		send(connfd,sendlineSor,MAXLINE,0);
-		recv(connfd,recvline,MAXLINE,0);/////////////////
-		printf("connfd:%d\n", connfd);
-		printf("sendlineSor:%s\n", sendlineSor);
-
-	}
-	else //if (recvl.ctrl1=='2')
-	{
 		
 		sendlineDst[0]=dstline.ctrl1;
 		sendlineDst[1]=dstline.ctrl2;
@@ -308,8 +330,11 @@ void *dealing(void *jj){
 			{
 				if (onlineUsers[i].on_off)//if on
 				{
+					sorline.ctrl1='4';
+					sorline.ctrl2='1';
 					send(onlineUsers[i].connfd,sendlineDst,MAXLINE,0);
-					recv(connfd,recvline,MAXLINE,0);/////////////////
+					memset(sendlineDst,0,522);
+					memset(dstline.data,0,500);
 				}
 			}
 		}
@@ -317,12 +342,20 @@ void *dealing(void *jj){
 		{
 			int findConnfd_t=-1;
 			findConnfd_t=findConnfd(recvl.dst_name);
+			printf("%d\n",findConnfd_t );
 			if (findConnfd_t==-1)///send failed
 			{
 				sorline.ctrl1='4';
 				sorline.ctrl2='2';
-			}else 
-			send(findConnfd_t,sendlineDst,MAXLINE,0);//to certain one dst
+			}
+			else 
+			{
+				sorline.ctrl1='4';
+				sorline.ctrl2='1';
+				send(findConnfd_t,sendlineDst,MAXLINE,0);//to certain one dst
+				memset(sendlineDst,0,522);
+				memset(dstline.data,0,500);
+			}
 		}
 		
 		sendlineSor[0]=sorline.ctrl1;
@@ -339,11 +372,17 @@ void *dealing(void *jj){
 		{
 			sendlineSor[22+i]=sorline.data[i];
 		}
-
+		printf("sendlineSor:%s\n",sendlineSor );
 		send(connfd,sendlineSor,MAXLINE,0);//to source
-		recv(connfd,recvline,MAXLINE,0);/////////////////
-	}	
+		memset(sendlineSor,0,522);
+		memset(sorline.data,0,500);
+		memset(recvline,0,532);
+		memset(recvl.data,0,500);
+
+	//}	
 }
+	if(n<0)
+		printf("loop end\n");
 	return NULL;
 }
 
@@ -393,8 +432,8 @@ int main()
 		}
 		else
 		onlineUsers[j].connfd=accept (listenfd,(struct sockaddr *) &cliaddr, &clilen);
-		pthread_create(&thread[j],NULL,dealing,(void *)&j);
-		printf("%s\n","dddddd" );
+		pthread_create(&thread[j],NULL,dealing,(void *)j);
+		printf("%s\n","thread create succeed!" );
 
 	}
 

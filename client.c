@@ -14,6 +14,7 @@
 
 int sockfd;
 int local_log;//0 offline    1 online
+char this_name[10];//my name(if login)
 pthread_t main_thread;
 pthread_t recv_thread;
 
@@ -52,10 +53,10 @@ void sendMessage(char choose);
 /*-----------------------mainThread()  recv everything but words------------------------*/
 void *mainThread(void *j){
 
-	sendline[0]='8';
-	sendline[1]='8';
-	send(sockfd,sendline,MAXLINE,0);
-	recv(sockfd,recvline,MAXLINE,0);
+	//sendline[0]='8';
+	//sendline[1]='8';
+	//send(sockfd,sendline,MAXLINE,0);
+	//recv(sockfd,recvline,MAXLINE,0);
 
 	dealMessage();//system dignals (except words send to you)
 	
@@ -65,6 +66,8 @@ void *mainThread(void *j){
 /*-----------------------recvThread()  only recv the words someone send to you------------------------*/
 void *recvThread(void *j){
 	while(1){
+		memset(recvline,0,522);
+		memset(recvl.data,0,500);
 	if(recv(sockfd,recvline,MAXLINE,0)==0){
 		perror("The server terminated prematurely");
 		exit(4);
@@ -92,6 +95,7 @@ void *recvThread(void *j){
 		{
 			printf("%s\n","Login succeed!" );
 			local_log=1;
+			strcpy(this_name,recvl.from);
 			sendl.ctrl1='2';
 		}
 	else if (recvl.ctrl1=='3'&&recvl.ctrl2=='2')//login failed
@@ -109,12 +113,22 @@ void *recvThread(void *j){
 		{
 			printf("%s\n","Message send failed" );
 		}
+		else if (recvl.ctrl2=='3')//some one send you words
+		{
+			printf("%s\n",recvl.data );	
+		}
+		else if (recvl.ctrl2=='4')//some one send you words
+		{
+			printf("online list(divide by ##):\n" );
+			printf("%s\n",recvl.data );
+			
+		}else if (recvl.ctrl2=='5')//some one send you words
+		{
+			printf("%s\n","Online list receiving failed" );	
+		}
 	}
-	else if (recvl.ctrl1=='4'&&recvl.ctrl2=='3')//some one send you words
-	{
-		printf("%s\n",recvl.data );
-		
-	}else if (recvl.ctrl1=='5')
+
+	else if (recvl.ctrl1=='5')
 	{
 		if (recvl.ctrl2=='1')
 		{
@@ -136,6 +150,7 @@ void unlogin(){
 	sendl.ctrl2='1';
 	sendline[0]=sendl.ctrl1;
 	sendline[1]=sendl.ctrl2;
+	local_log=0;
 	send(sockfd,sendline,MAXLINE,0);
 }
 
@@ -161,7 +176,13 @@ void login(){
 	{
 		sendline[12+i]=sendl.local_key[i];
 	}
+		printf("%s\n",sendline);
 	send(sockfd,sendline,MAXLINE,0);
+	for (i = 0; i < 10; ++i)
+	{
+		sendline[12+i]='\0';
+	}
+
 
 }
 void regist(){
@@ -191,25 +212,33 @@ void regist(){
 }
 void sendMessage(char choose){
 
+	memset(sendline,0,522);
+	strcpy(sendl.local_name,this_name);
 	sendl.ctrl1='2';
 	char to_name[10];
 	char data[500];
-	
-	if (choose=='4')
+	//strcpy(sendl.local_name,);
+	if (choose!='5')
 	{
-		sendl.ctrl2='2';//group send
-	}
-	else {
-		sendl.ctrl2='1';//to certain one
-		printf("%s\n","Please input his name" );
-		scanf("%s",to_name);
-		strcpy(sendl.dst_name,to_name);
-	}
+		if (choose=='4')
+		{
+			sendl.ctrl2='2';				//group send
+		}
+		else if(choose=='3')				 //send to certain one
+		{
+			sendl.ctrl2='1';				//to certain one
+			printf("%s\n","Please input his name" );
+			scanf("%s",to_name);
+			strcpy(sendl.dst_name,to_name);
+		}
 	
-	printf("%s\n","Please input your words:" );
-	scanf("%s",data);
-	strcpy(sendl.data,data);
-
+		printf("%s\n","Please input your words:" );
+		scanf("%s",data);
+		strcpy(sendl.data,data);
+	}else {									//print online list
+		sendl.ctrl1='1';
+		sendl.ctrl2='3';
+	}
 	sendline[0]=sendl.ctrl1;
 	sendline[1]=sendl.ctrl2;
 	int i;
@@ -227,6 +256,9 @@ void sendMessage(char choose){
 	}
 
 	send(sockfd,sendline,MAXLINE,0);
+	memset(sendline,0,532);
+	memset(sendl.dst_name,0,10);
+	memset(sendl.data,0,500);
 	
 
 }
@@ -235,12 +267,16 @@ void dealMessage(){
 	
 	while(1)
 	{
+	printf("---------------------------------\n" );
 	printf("%s\n","Please input numbers:" );
 	printf("%s\n","1:login" );
 	printf("%s\n","2:regist" );
 	printf("%s\n","3:send to one" );
 	printf("%s\n","4:send to all" );
-	printf("%s\n","5:quit" );
+	printf("%s\n","5:print online list" );
+	printf("%s\n","6:quit" );
+	printf("%s\n","7:quit and close" );
+	printf("---------------------------------\n" );
 	char choose[10];
 	scanf("%s",choose);
 	printf("this is choose:%s\n",choose );
@@ -252,35 +288,53 @@ void dealMessage(){
 			printf("%s\n","You have logined already." );
 		}else
 			login();
-	}else if (!strcmp(choose,"2"))
+	}
+	else if (!strcmp(choose,"2"))
 	{
 		regist();
-	}else if (!strcmp(choose,"3"))
+	}
+	else if (!strcmp(choose,"3"))
 	{
 		if (local_log==0)
 		{
 			printf("%s\n","Login first, please!" );
 		}else
 			sendMessage(choose[0]);//certain one send
-	}else if (!strcmp(choose,"4"))
+	}
+	else if (!strcmp(choose,"4"))
 	{
 		if (local_log==0)
 		{
 			printf("%s\n","Login first, please!" );
 		}else
 			sendMessage(choose[0]);//group send
-	}else if (!strcmp(choose,"5"))
+	}
+	else if (!strcmp(choose,"5"))
+	{
+		sendMessage(choose[0]);
+	}
+	else if (!strcmp(choose,"6"))
 	{
 		if (local_log==0)
 		{
 			printf("%s\n","You didn't login!" );
 		}else
-			unlogin();
-			exit(0);
-	}else
-		printf("%s\n","Input error" );
-	}
+			{
+				unlogin();
 
+			}
+	}
+	else if (!strcmp(choose,"7"))
+	{
+		if (local_log==1)
+		{
+			unlogin();
+		}	
+			exit(0);
+	}
+	else
+		printf("%s\n","Input error" );
+}
 }
 int main()
 {
@@ -296,15 +350,15 @@ int main()
 	local_log=0;
 
 	if(connect(sockfd,(struct sockaddr *)&servaddr ,sizeof(servaddr))==0)
-		printf("%s\n","Connect succeed" );
+		{
+			printf("%s\n","Connect succeed" );
+			int tag2=pthread_create(&recv_thread,NULL,recvThread,NULL);
+				if(tag2!=0)
+					printf("%s\n","thread recv create error!" );
+			mainThread(NULL);
+		}
 	else
 		printf("%s\n","Connect failed" );
-
-	int tag2=pthread_create(&recv_thread,NULL,recvThread,NULL);
-	if(tag2!=0)
-		printf("%s\n","thread recv create error!" );
-
-	mainThread(NULL);
 
 	return 0;
 }
