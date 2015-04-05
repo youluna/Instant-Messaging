@@ -16,7 +16,7 @@
 struct USER{
 	char name[10];
 	char key[10];
-	int tag;//1:avaliable  0:not free
+	int tag;//1:in use  0:free
 	
 };
 struct USER users[10];
@@ -56,11 +56,12 @@ char recvline[MAXLINE];
 char sendlineSor[MAXLINE];
 char sendlineDst[MAXLINE];
 pthread_mutex_t count_mutex;
+pthread_mutex_t db_mutex;
 int findOnlineStatus(char name[]);
 int findConnfd(char name[]);
 void loginVerify(char name[],char key[],int j);
 void registeVerify(char name[],char key[]);
-void unlogin(char name[]);
+void unlogin(char name[],char tag);
 int findDBFree();
 int findFree();
 void *dealing(void *j);
@@ -76,6 +77,7 @@ void sendOnlineList(){
 	printf("sendOnlineList:\n" );
 	for ( i = 0; i < 10; ++i)
 	{
+		pthread_mutex_lock(&count_mutex);
 		if (onlineUsers[i].on_off==1)
 		{
 			printf("in circle\n");
@@ -85,35 +87,43 @@ void sendOnlineList(){
 			printf("%s\n",sorline.data );
 		}
 		else ;
+		pthread_mutex_unlock(&count_mutex);
 	}
 
 }
 
 int findOnlineStatus(char name[]){
 	int i;
+	pthread_mutex_lock(&count_mutex);
 	for (i = 0; i < 10; ++i)
 	{
 		if (!strcmp(name,onlineUsers[i].name))
 		{
 			int k=onlineUsers[i].on_off;
+			pthread_mutex_unlock(&count_mutex);
 			return k;
 		}
 	}
 	printf("%s\n","can't find the name" );
+	pthread_mutex_unlock(&count_mutex);
 	return 0;
 }
 int findConnfd(char name[]){
 	int i;
 	for (i = 0; i < 10; ++i)
 	{
+		pthread_mutex_lock(&count_mutex);
 		if (!strcmp(name,onlineUsers[i].name))
 		{
+			int k=onlineUsers[i].connfd;
+			pthread_mutex_unlock(&count_mutex);
 			//printf("%d\n", onlineUsers[i].connfd);
-			return onlineUsers[i].connfd;
+			return k;
 		}
 		//printf("%s\n",onlineUsers[i].name );
 		//printf("%d\n",onlineUsers[i].on_off );
 		//printf("%d\n",onlineUsers[i].connfd );////////////////////////////////////////////////////
+		pthread_mutex_unlock(&count_mutex);
 	}
 	printf("%s\n","can't find the name" );
 	return -1;
@@ -123,21 +133,33 @@ void loginVerify(char name[],char key[],int j){
 	int i;
 	for (i = 0; i < 10; ++i)
 	{
-		if (!strcmp(name,users[i].name)&&findOnlineStatus(users[i].name)==0)
+		pthread_mutex_lock(&db_mutex);
+		if (!strcmp(name,users[i].name))
 		{
-			if (!strcmp(key,users[i].key))
+			if (findOnlineStatus(users[i].name)==0)
 			{
+				if (!strcmp(key,users[i].key))
+				{
+					pthread_mutex_unlock(&db_mutex);
 					sorline.ctrl1='3';
 					sorline.ctrl2='1';
 					strcpy(sorline.from,name);
 					printf("%s\n","login succeed" );
-					strcpy(onlineUsers[j].name,name);
-					onlineUsers[j].on_off=1;
+					
+					pthread_mutex_lock(&count_mutex);
+						strcpy(onlineUsers[j].name,name);
+						onlineUsers[j].on_off=1;
+					pthread_mutex_unlock(&count_mutex);
+					
 					return ;	
-			}else 
-			printf("%s\n","password incorrect" );
+				}else 
+					printf("%s\n","password incorrect" );
+			}
+			else printf("online already\n" );
+			
 		}
 		else ;
+		pthread_mutex_unlock(&db_mutex);
 	}
 	
 
@@ -151,13 +173,16 @@ void registeVerify(char name[],char key[]){
 	int i;
 	for (i = 0; i < 10; ++i)
 	{
+		pthread_mutex_lock(&db_mutex);
 		if (!strcmp(name,users[i].name))
 		{
+			pthread_mutex_unlock(&db_mutex);
 			sorline.ctrl1='3';
 			sorline.ctrl2='4';
 			printf("%s\n","regist failed.name already exits" );
 			return ;
 		}
+		pthread_mutex_unlock(&db_mutex);
 	}
 
 	
@@ -167,57 +192,93 @@ void registeVerify(char name[],char key[]){
 	{
 		sorline.ctrl1='3';
 		sorline.ctrl2='4';
-		printf("%s\n","regist failed.No space " );
+		printf("%s\n","Regist failed.No space " );
 	}
 	else
 	sorline.ctrl1='3';
 	sorline.ctrl2='3';
+	pthread_mutex_lock(&db_mutex);
 	strcpy(users[i].name,name);
 	strcpy(users[i].key,key);
 	users[i].tag=0;
+	pthread_mutex_unlock(&db_mutex);
 	printf("%s\n","regist succeed" );
 }
-void unlogin(char name[]){
+void unlogin(char name[],char tag){
 	int i;
 	for (i = 0; i < 10; ++i)
 	{
+		pthread_mutex_lock(&count_mutex);
 		if (!strcmp(name,onlineUsers[i].name))
 		{
 			onlineUsers[i].on_off=0;//offline
-			onlineUsers[i].connfd=0;
-			sorline.ctrl1='5';
-			sorline.ctrl1='1';
-			return ;
+			memset(onlineUsers[i].name,0,10);
+			if (tag!='3')
+			{	
+				if (tag=='2')//unlog and quit
+				{
+					onlineUsers[i].connfd=0;
+				}
+				pthread_mutex_unlock(&count_mutex);
+				sorline.ctrl1='5';
+				sorline.ctrl1='1';
+				return ;
+			}
 		}
+		pthread_mutex_unlock(&count_mutex);
+		pthread_mutex_lock(&db_mutex);
+		if (tag=='3'&&(!strcmp(name,users[i].name)))
+		{
+			sorline.ctrl1='5';
+			sorline.ctrl1='3';
+			memset(users[i].name,0,10);
+			memset(users[i].key,0,10);
+			users[i].tag=0;//now it's free
+		}
+		pthread_mutex_unlock(&db_mutex);
 	}
-	pthread_exit(NULL);		
+	pthread_exit(NULL);	
+	sorline.ctrl1='5';
+	sorline.ctrl1='2';	
 	printf("%s\n","unlogin error" );
 }
 int findDBFree(){
 	int i;
 	for (i = 0; i < 10; ++i)
 	{
-		if (users[i].tag==1)
-			return i;
+		pthread_mutex_lock(&db_mutex);
+		if (users[i].tag==0)//if database free
+			{
+				pthread_mutex_unlock(&db_mutex);
+				return i;
+			}
+		pthread_mutex_unlock(&db_mutex);
 	}
 	return -1;
 }
 int findFree(){
-	int i;
+	int i,k;
 	for (i = 0; i < 10; ++i)
 	{
-		if (onlineUsers[i].connfd==0)
+		pthread_mutex_lock(&count_mutex);
+		k=onlineUsers[i].connfd;
+		pthread_mutex_unlock(&count_mutex);
+		if (k==0)
 			return i;
 	}
 	return -1;
 }
+
 void *dealing(void *jj){
 /*--------------------getting data------------------------*/
 
 	printf("%s\n","dealing begin" );
 	int connfd;
 	int j=(int)jj;
-	connfd=onlineUsers[j].connfd;
+	pthread_mutex_lock(&count_mutex);
+		connfd=onlineUsers[j].connfd;
+		printf("%d\n",connfd );
+	pthread_mutex_unlock(&count_mutex);
 	printf("%d\n",j );
 	printf("%d",connfd);
 	memset(recvline,0,532);
@@ -225,13 +286,24 @@ void *dealing(void *jj){
 	int n;
 
 	while((n=recv(connfd,recvline,MAXLINE,0))>0){
-		printf("%s\n","--------------onlineUsers data----------------" );
+		printf("%s\n","--------------Users' Data Base----------------" );
 		int i;
 		for (i = 0; i < 10; ++i)
+		{	pthread_mutex_lock(&db_mutex);
+			printf("%s\n",users[i].name );
+			printf("%s\n",users[i].key );
+			pthread_mutex_unlock(&db_mutex);
+		}
+		printf("%s\n","--------------Users' Data Base----------------" );
+		printf("%s\n","--------------onlineUsers data----------------" );
+		
+		for (i = 0; i < 10; ++i)
 		{
-		printf("%s\n",onlineUsers[i].name );
-		printf("%d\n",onlineUsers[i].on_off );
-		printf("%d\n",onlineUsers[i].connfd );
+			pthread_mutex_lock(&count_mutex);
+			printf("%s\n",onlineUsers[i].name );
+			printf("%d\n",onlineUsers[i].on_off );
+			printf("%d\n",onlineUsers[i].connfd );
+			pthread_mutex_unlock(&count_mutex);
 		}
 		printf("%s\n","--------------onlineUsers data----------------" );
 	printf("recvline:%s\n",recvline );
@@ -284,9 +356,6 @@ void *dealing(void *jj){
 			strcpy(dstline.dst,recvl.dst_name);
 			strcpy(dstline.data,recvl.data);
 			
-			printf("dstline.from:%s\n",dstline.from );
-			printf("dstline.dst:%s\n",dstline.dst );
-			printf("dstline.data:%s\n",dstline.data );
 		}
 		else if (recvl.ctrl2=='2')
 		{
@@ -297,14 +366,27 @@ void *dealing(void *jj){
 			strcpy(dstline.data,recvl.data);
 
 		}
+		
+		printf("dstline.from:%s\n",dstline.from );
+		printf("dstline.dst:%s\n",dstline.dst );
+		printf("dstline.data:%s\n",dstline.data );
 
 	}
 	else if (recvl.ctrl1=='3')
 	{
-		if (recvl.ctrl2=='1')
+		if (recvl.ctrl2=='1')//unlog only
 		{
-			unlogin(recvl.local_name);
+			unlogin(recvl.local_name,'1');
 		}
+		else if (recvl.ctrl2=='2')//unlog and quit
+		{
+			unlogin(recvl.local_name,'2');///////////////////////////////////
+		}
+		else if (recvl.ctrl2=='3')//delete from database
+		{
+			unlogin(recvl.local_name,'3');///////////////////////////////////
+		}
+
 	}
 		
 		sendlineDst[0]=dstline.ctrl1;
@@ -328,6 +410,7 @@ void *dealing(void *jj){
 		{
 			for ( i = 0; i < 10; ++i)
 			{
+				pthread_mutex_lock(&count_mutex);
 				if (onlineUsers[i].on_off)//if on
 				{
 					sorline.ctrl1='4';
@@ -336,6 +419,7 @@ void *dealing(void *jj){
 					memset(sendlineDst,0,522);
 					memset(dstline.data,0,500);
 				}
+				pthread_mutex_unlock(&count_mutex);
 			}
 		}
 		else if (recvl.ctrl1=='2'&&recvl.ctrl2=='1')
@@ -389,19 +473,28 @@ void *dealing(void *jj){
 int main()
 {
 /*-------------database initial--------------------*/
+	pthread_mutex_lock(&db_mutex);
 	strcpy(users[0].name,"about");
 	strcpy(users[0].key,"112233");
 	strcpy(users[1].name,"blank");
 	strcpy(users[1].key,"112233");
 	strcpy(users[2].name,"test");
 	strcpy(users[2].key,"112233");
-	users[0].tag=0;
+	users[0].tag=1;//in use
+	users[1].tag=1;//in use
+	users[2].tag=1;//in use
 	int i;
+	for (int i = 3; i < 7; ++i)
+	{
+		users[i].tag=0;//not in use
+	}
+	pthread_mutex_unlock(&db_mutex);
+	pthread_mutex_lock(&count_mutex);
 	for ( i = 0; i < 10; ++i)
 	{
 		onlineUsers[i].on_off=0;//initial 0"offline
 	}
-
+	pthread_mutex_unlock(&count_mutex);
 /*-------------database initial--------------------*/
 	int listenfd;
 	//pid_t childpid;
@@ -426,45 +519,21 @@ int main()
 	while(1){
 		clilen=sizeof(cliaddr);
 		int j=findFree();
+		int k;
 		if (j==-1)
 		{
 			printf("%s\n","No room for new account!Please wait!" );
 		}
 		else
-		onlineUsers[j].connfd=accept (listenfd,(struct sockaddr *) &cliaddr, &clilen);
-		pthread_create(&thread[j],NULL,dealing,(void *)j);
-		printf("%s\n","thread create succeed!" );
+			
+			k=accept (listenfd,(struct sockaddr *) &cliaddr, &clilen);
+			pthread_mutex_lock(&count_mutex);
+				onlineUsers[j].connfd=k;
+			pthread_mutex_unlock(&count_mutex);
+			printf("testtttttttttttttttttt:%d\n",onlineUsers[j].connfd );
+			pthread_create(&thread[j],NULL,dealing,(void *)j);
+			printf("%s\n","thread create succeed!" );
 
 	}
-
-/*
-	for(;;){
-		clilen=sizeof(cliaddr);
-		connfd=accept (listenfd,(struct sockaddr *) &cliaddr, &clilen);
-		printf("%s\n","Received request..." );
-		/////
-
-		if((childpid=fork())==0){
-			printf("%s\n","Child created for dealing with client requests" );
-		//close
-		close(listenfd);
-
-
-		//print data from client
-		while((n=recv(connfd,buf,MAXLINE,0))>0){
-			printf("%s\n","String received from and resent to the client:" );
-			puts(buf);
-			send(connfd,buf,n,0);
-			memset(buf,0,MAXLINE);
-		}
-
-		if(n<0)
-			printf("%s\n","Read error" );
-		exit(0);
-	}
-	
-	close(connfd);
-}*/
-
 
 }

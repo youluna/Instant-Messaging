@@ -44,7 +44,7 @@ char recvline[MAXLINE]={'0'};
 void *mainThread(void *j);
 void *recvThread(void *j);
 void login();
-void unlogin();
+void unlogin(char c);
 void regist();
 void dealMessage();
 void sendMessage(char choose);
@@ -91,17 +91,32 @@ void *recvThread(void *j){
 	}
 /*----------------getting data------------------------*/
 
-	if (recvl.ctrl1=='3'&&recvl.ctrl2=='1')//login succeed
+
+	if (recvl.ctrl1=='3')
 		{
-			printf("%s\n","Login succeed!" );
-			local_log=1;
-			strcpy(this_name,recvl.from);
-			sendl.ctrl1='2';
-		}
-	else if (recvl.ctrl1=='3'&&recvl.ctrl2=='2')//login failed
-		{
-			printf("%s\n","Login failed!" );
-			local_log=0;
+			if (recvl.ctrl2=='1')//login succeed
+			{
+				printf("%s\n","Login succeed!" );
+				local_log=1;//login state
+				strcpy(this_name,recvl.from);
+				sendl.ctrl1='2';
+			}
+			else if (recvl.ctrl2=='2')//login failed
+			{
+				printf("%s\n","Login failed!" );
+				local_log=0;//unlog state
+			}
+			else if (recvl.ctrl2=='3')//login failed
+			{
+				printf("%s\n","Regist succeed! And please login~" );
+				local_log=0;//unlog state
+			}
+			else if (recvl.ctrl2=='4')//login failed
+			{
+				printf("%s\n","Regist failed!Maybe no space" );
+				local_log=0;//unlog state
+			}
+			
 		}
 	else if (recvl.ctrl1=='4')
 	{
@@ -115,7 +130,7 @@ void *recvThread(void *j){
 		}
 		else if (recvl.ctrl2=='3')//some one send you words
 		{
-			printf("%s\n",recvl.data );	
+			printf("%s:%s\n",recvl.from,recvl.data );	
 		}
 		else if (recvl.ctrl2=='4')//some one send you words
 		{
@@ -145,11 +160,29 @@ void *recvThread(void *j){
 	}
 }
 
-void unlogin(){
-	sendl.ctrl1='3';
-	sendl.ctrl2='1';
+void unlogin(char c){
+	if (c=='6')//unlog only
+	{
+		sendl.ctrl1='3';
+		sendl.ctrl2='1';	
+	}
+	else if (c=='7')
+	{
+		sendl.ctrl1='3';
+		sendl.ctrl2='2';
+	}
+	else if (c=='8')
+	{
+		sendl.ctrl1='3';
+		sendl.ctrl2='3';	
+	}
 	sendline[0]=sendl.ctrl1;
 	sendline[1]=sendl.ctrl2;
+	int i;
+	for(i = 0; i < 10; i++)
+	{
+		sendline[2+i]=this_name[i];
+	}
 	local_log=0;
 	send(sockfd,sendline,MAXLINE,0);
 }
@@ -159,9 +192,10 @@ void login(){
 	char key[10]={'0'};
 	sendl.ctrl1='1';
 	sendl.ctrl2='1';
-	printf("%s\n","Please input your name and password(login):" );
+	printf("%s\n","Please input your name and password(login) with in 10 letters:" );
 	scanf("%s",name);
 	scanf("%s",key);
+
 	strcpy(sendl.local_name,name);
 	strcpy(sendl.local_key,key);
 
@@ -186,13 +220,20 @@ void login(){
 
 }
 void regist(){
-	char name[10]={'0'};
-	char key[10]={'0'};
+	char name[20]={'0'};
+	char key[20]={'0'};
 	sendl.ctrl1='1';
 	sendl.ctrl2='2';
-	printf("%s\n","Please input name and password(regist):" );
+	printf("%s\n","Please input name and password(regist)with in 10 letters:" );
 	scanf("%s",name);
 	scanf("%s",key);
+	while (strlen(name)>10||strlen(key)>10)
+	{
+		printf("All with in 10 letters!\n");
+		scanf("%s",name);
+		scanf("%s",key);
+	}
+	
 	strcpy(sendl.local_name,name);
 	strcpy(sendl.local_key,key);
 
@@ -276,6 +317,7 @@ void dealMessage(){
 	printf("%s\n","5:print online list" );
 	printf("%s\n","6:quit" );
 	printf("%s\n","7:quit and close" );
+	printf("%s\n","8:delete me from database" );
 	printf("---------------------------------\n" );
 	char choose[10];
 	scanf("%s",choose);
@@ -320,7 +362,7 @@ void dealMessage(){
 			printf("%s\n","You didn't login!" );
 		}else
 			{
-				unlogin();
+				unlogin(choose[0]);
 
 			}
 	}
@@ -328,9 +370,20 @@ void dealMessage(){
 	{
 		if (local_log==1)
 		{
-			unlogin();
+			unlogin(choose[0]);
 		}	
 			exit(0);
+	}
+	else if (!strcmp(choose,"8"))
+	{
+		if (local_log==0)
+		{
+			printf("%s\n","You didn't login!I don't know who you are :(" );
+		}else
+			{
+				unlogin(choose[0]);
+
+			}
 	}
 	else
 		printf("%s\n","Input error" );
