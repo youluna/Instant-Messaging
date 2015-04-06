@@ -109,12 +109,10 @@ void *recvThread(void *j){
 			else if (recvl.ctrl2=='3')//login failed
 			{
 				printf("%s\n","Regist succeed! And please login~" );
-				local_log=0;//unlog state
 			}
 			else if (recvl.ctrl2=='4')//login failed
 			{
 				printf("%s\n","Regist failed!Maybe no space" );
-				local_log=0;//unlog state
 			}
 			
 		}
@@ -274,7 +272,8 @@ void sendMessage(char choose){
 		}
 	
 		printf("%s\n","Please input your words:" );
-		scanf("%s",data);
+		getchar();
+		fgets(data,500,stdin);
 		strcpy(sendl.data,data);
 	}else {									//print online list
 		sendl.ctrl1='1';
