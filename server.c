@@ -413,14 +413,17 @@ void *dealing(void *jj){
 				pthread_mutex_lock(&count_mutex);
 				if (onlineUsers[i].on_off)//if on
 				{
-					sorline.ctrl1='4';
-					sorline.ctrl2='1';
 					send(onlineUsers[i].connfd,sendlineDst,MAXLINE,0);
-					memset(sendlineDst,0,522);
-					memset(dstline.data,0,500);
+					printf("%s\n",onlineUsers[i].name );
+					
 				}
 				pthread_mutex_unlock(&count_mutex);
 			}
+			memset(sendlineDst,0,522);
+			memset(dstline.data,0,500);
+			sorline.ctrl1='4';
+			sorline.ctrl2='1';
+
 		}
 		else if (recvl.ctrl1=='2'&&recvl.ctrl2=='1')
 		{
@@ -465,8 +468,23 @@ void *dealing(void *jj){
 
 	//}	
 }
-	if(n<0)
+
+	if(n<0||n==0)
+	{
+		char abnor_name[10];
+		int i;
+		for ( i = 0; i < 10; ++i)
+		{
+			pthread_mutex_lock(&count_mutex);
+			if (onlineUsers[i].connfd==connfd)
+			{
+				strcpy(abnor_name,onlineUsers[i].name);
+			}
+			pthread_mutex_unlock(&count_mutex);
+		}
+		unlogin(abnor_name,'2');
 		printf("loop end\n");
+	}
 	return NULL;
 }
 
