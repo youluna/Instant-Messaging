@@ -396,7 +396,7 @@ int main()
 
 	memset(&servaddr,0,sizeof(servaddr));
 	servaddr.sin_family=AF_INET;
-	servaddr.sin_addr.s_addr=inet_addr("127.0.0.1");
+	servaddr.sin_addr.s_addr=inet_addr("114.212.142.70");
 	servaddr.sin_port=htons(SERV_PORT);
 
 	local_log=0;

@@ -73,7 +73,7 @@ void sendOnlineList(){
 	sorline.ctrl2='4';//send online list succeed!
 	int i;
 	memset(sorline.data,0,500);
-	char a[2]={'#','#'};
+	char a[]="##";
 	printf("sendOnlineList:\n" );
 	for ( i = 0; i < 10; ++i)
 	{
